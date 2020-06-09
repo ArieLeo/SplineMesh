@@ -144,7 +144,8 @@ namespace SplineMesh {
                 GetScale(time),
                 GetRoll(time),
                 distance,
-                time);
+                time,
+                this);
         }
 
         /// <summary>
@@ -155,17 +156,17 @@ namespace SplineMesh {
         public CurveSample GetSample(float time) {
             AssertTimeInBounds(time);
             CurveSample previous = samples[0];
-            CurveSample next = null;
+            CurveSample next = default(CurveSample);
+            bool found = false;
             foreach (CurveSample cp in samples) {
                 if (cp.timeInCurve >= time) {
                     next = cp;
+                    found = true;
                     break;
                 }
                 previous = cp;
             }
-            if (next == null) {
-                throw new Exception("Can't find curve samples.");
-            }
+            if (!found) throw new Exception("Can't find curve samples.");
             float t = next == previous ? 0 : (time - previous.timeInCurve) / (next.timeInCurve - previous.timeInCurve);
 
             return CurveSample.Lerp(previous, next, t);
@@ -181,17 +182,17 @@ namespace SplineMesh {
                 throw new ArgumentException("Distance must be positive and less than curve length. Length = " + Length + ", given distance was " + d);
 
             CurveSample previous = samples[0];
-            CurveSample next = null;
+            CurveSample next = default(CurveSample);
+            bool found = false;
             foreach (CurveSample cp in samples) {
                 if (cp.distanceInCurve >= d) {
                     next = cp;
+                    found = true;
                     break;
                 }
                 previous = cp;
             }
-            if (next == null) {
-                throw new Exception("Can't find curve samples.");
-            }
+            if (!found) throw new Exception("Can't find curve samples.");
             float t = next == previous ? 0 : (d - previous.distanceInCurve) / (next.distanceInCurve - previous.distanceInCurve);
 
             return CurveSample.Lerp(previous, next, t);
@@ -199,6 +200,44 @@ namespace SplineMesh {
 
         private static void AssertTimeInBounds(float time) {
             if (time < 0 || time > 1) throw new ArgumentException("Time must be between 0 and 1 (was " + time + ").");
+        }
+
+        public CurveSample GetProjectionSample(Vector3 pointToProject) {
+            float minSqrDistance = float.PositiveInfinity;
+            int closestIndex = -1;
+            int i = 0;
+            foreach (var sample in samples) {
+                float sqrDistance = (sample.location - pointToProject).sqrMagnitude;
+                if (sqrDistance < minSqrDistance) {
+                    minSqrDistance = sqrDistance;
+                    closestIndex = i;
+                }
+                i++;
+            }
+            CurveSample previous, next;
+            if(closestIndex == 0) {
+                previous = samples[closestIndex];
+                next = samples[closestIndex + 1];
+            } else if(closestIndex == samples.Count - 1) {
+                previous = samples[closestIndex - 1];
+                next = samples[closestIndex];
+            } else {
+                var toPreviousSample = (pointToProject - samples[closestIndex - 1].location).sqrMagnitude;
+                var toNextSample = (pointToProject - samples[closestIndex + 1].location).sqrMagnitude;
+                if (toPreviousSample < toNextSample) {
+                    previous = samples[closestIndex - 1];
+                    next = samples[closestIndex];
+                } else {
+                    previous = samples[closestIndex];
+                    next = samples[closestIndex + 1];
+                }
+            }
+
+            var onCurve = Vector3.Project(pointToProject - previous.location, next.location - previous.location) + previous.location;
+            var rate = (onCurve - previous.location).sqrMagnitude / (next.location - previous.location).sqrMagnitude;
+            rate = Mathf.Clamp(rate, 0, 1);
+            var result = CurveSample.Lerp(previous, next, rate);
+            return result;
         }
     }
 }

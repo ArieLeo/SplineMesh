@@ -71,19 +71,7 @@ namespace SplineMesh {
         }
 
         private void OnEnable() {
-            curves.Clear();
-            for (int i = 0; i < nodes.Count - 1; i++) {
-                SplineNode n = nodes[i];
-                SplineNode next = nodes[i + 1];
-
-                CubicBezierCurve curve = new CubicBezierCurve(n, next);
-                curve.Changed.AddListener(UpdateAfterCurveChanged);
-                curves.Add(curve);
-            }
-            RaiseNodeListChanged(new ListChangedEventArgs<SplineNode>() {
-                type = ListChangeType.clear
-            });
-            UpdateAfterCurveChanged();
+            RefreshCurves();
         }
 
         public ReadOnlyCollection<CubicBezierCurve> GetCurves() {
@@ -132,6 +120,25 @@ namespace SplineMesh {
             if (res == nodes.Count - 1)
                 res--;
             return res;
+        }
+		
+	/// <summary>
+	/// Refreshes the spline's internal list of curves.
+	// </summary>
+	public void RefreshCurves() {
+            curves.Clear();
+            for (int i = 0; i < nodes.Count - 1; i++) {
+                SplineNode n = nodes[i];
+                SplineNode next = nodes[i + 1];
+
+                CubicBezierCurve curve = new CubicBezierCurve(n, next);
+                curve.Changed.AddListener(UpdateAfterCurveChanged);
+                curves.Add(curve);
+            }
+            RaiseNodeListChanged(new ListChangedEventArgs<SplineNode>() {
+                type = ListChangeType.clear
+            });
+            UpdateAfterCurveChanged();
         }
 
         /// <summary>
@@ -275,6 +282,25 @@ namespace SplineMesh {
             start.Scale = end.Scale;
             start.Up = end.Up;
             start.Changed += StartNodeChanged;
+        }
+
+        public CurveSample GetProjectionSample(Vector3 pointToProject) {
+            CurveSample closest = default(CurveSample);
+            float minSqrDistance = float.MaxValue;
+            foreach (var curve in curves) {
+                var projection = curve.GetProjectionSample(pointToProject);
+                if (curve == curves[0]) {
+                    closest = projection;
+                    minSqrDistance = (projection.location - pointToProject).sqrMagnitude;
+                    continue;
+                }
+                var sqrDist = (projection.location - pointToProject).sqrMagnitude;
+                if (sqrDist < minSqrDistance) {
+                    minSqrDistance = sqrDist;
+                    closest = projection;
+                }
+            }
+            return closest;
         }
     }
 
